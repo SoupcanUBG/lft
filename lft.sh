@@ -1,17 +1,16 @@
-#!/bin/bash
-CONFIG_DIR="$HOME/.lft"
-USER_FILE="$CONFIG_DIR/project.user"
-PASS_FILE="$CONFIG_DIR/project.password"
-HOST_FILE="$CONFIG_DIR/project.host"
-ROOT_FILE="$CONFIG_DIR/project.root"
-
+#!/bin/bashCONFIG_DIR="$HOME/.lft"
+CONFIG_FILE="$CONFIG_DIR/config.json"
 mkdir -p "$CONFIG_DIR"
 
 read_config() {
-  USER=$(<"$USER_FILE")
-  PASS=$(<"$PASS_FILE")
-  HOST=$(<"$HOST_FILE")
-  ROOT=$(<"$ROOT_FILE")
+  if [ ! -f "$CONFIG_FILE" ]; then
+    echo "❌ Config file not found. Run: lft signup"
+    exit 1
+  fi
+  USER=$(jq -r .user "$CONFIG_FILE")
+  PASS=$(jq -r .pass "$CONFIG_FILE")
+  HOST=$(jq -r .host "$CONFIG_FILE")
+  ROOT=$(jq -r .root "$CONFIG_FILE")
 }
 
 signup() {
@@ -21,12 +20,42 @@ signup() {
   read -p "BunnyCDN FTP host (e.g. ftp://uk.storage.bunnycdn.com): " HOST
   read -p "Remote base path (e.g. /soupcan or /project): " ROOT
 
-  echo "$USER" > "$USER_FILE"
-  echo "$PASS" > "$PASS_FILE"
-  echo "$HOST" > "$HOST_FILE"
-  echo "$ROOT" > "$ROOT_FILE"
-  echo "Saved config in $CONFIG_DIR"
+  jq -n --arg user "$USER" --arg pass "$PASS" --arg host "$HOST" --arg root "$ROOT" \
+    '{user: $user, pass: $pass, host: $host, root: $root}' > "$CONFIG_FILE"
+
+  echo "✅ Config saved to $CONFIG_FILE"
 }
+
+mkdir -p "$CONFIG_DIR"
+
+read_config() {
+  if [ ! -f "$CONFIG_FILE" ]; then
+    echo "❌ Config file not found. Run: lft signup"
+    exit 1
+  fi
+  USER=$(jq -r .user "$CONFIG_FILE")
+  PASS=$(jq -r .pass "$CONFIG_FILE")
+  HOST=$(jq -r .host "$CONFIG_FILE")
+  ROOT=$(jq -r .root "$CONFIG_FILE")
+}
+
+signup() {
+  echo "LFT Signup:"
+  read -p "BunnyCDN username: " USER
+  read -s -p "BunnyCDN password (FTP API key): " PASS; echo
+  read -p "BunnyCDN FTP host (e.g. ftp://uk.storage.bunnycdn.com): " HOST
+  read -p "Remote base path (e.g. /soupcan or /project): " ROOT
+
+  jq -n --arg user "$USER" --arg pass "$PASS" --arg host "$HOST" --arg root "$ROOT" \
+    '{user: $user, pass: $pass, host: $host, root: $root}' > "$CONFIG_FILE"
+
+  echo "✅ Config saved to $CONFIG_FILE"
+}
+
+
+
+
+
 
 uninstall() {
   echo "This will remove the lft CLI and all its config files (~/.lft)"
@@ -167,3 +196,4 @@ EOF
     exit 1
     ;;
 esac
+
