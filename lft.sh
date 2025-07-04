@@ -1,4 +1,11 @@
 #!/bin/bashCONFIG_DIR="$HOME/.lft"
+# Check if jq is installed
+if ! command -v jq >/dev/null 2>&1; then
+  echo "❌ Missing dependency: 'jq' is required to run this script."
+  echo "👉 Install it with: sudo apt install jq    # or: sudo dnf install jq"
+  exit 1
+fi
+
 CONFIG_FILE="$CONFIG_DIR/config.json"
 mkdir -p "$CONFIG_DIR"
 
