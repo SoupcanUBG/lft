@@ -1,0 +1,29 @@
+{
+  "name": "@notreallyr8/lft",
+  "version": "3.0.0",
+  "description": "LFT: Lightweight BunnyCDN uploader and downloader CLI using lftp",
+  "bin": {
+    "lft": "./lft"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SoupcanUBG/lft.git"
+  },
+  "keywords": [
+    "cli",
+    "bunnycdn",
+    "ftp",
+    "uploader",
+    "bash"
+  ],
+  "author": "Toby Lopez",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/SoupcanUBG/lft/issues"
+  },
+  "homepage": "https://github.com/SoupcanUBG/lft#readme",
+  "scripts": {
+    "postinstall": "command -v jq >/dev/null || echo '\u001b[31m⚠️  jq is required but not installed. Install it with: sudo apt install jq OR sudo dnf install jq\u001b[0m'"
+  },
+  "dependencies": {}
+}

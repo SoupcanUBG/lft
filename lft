@@ -1,0 +1,184 @@
+#!/bin/bash
+
+CONFIG_DIR="$HOME/.lft"
+CONFIG_FILE="$CONFIG_DIR/config.json"
+mkdir -p "$CONFIG_DIR"
+
+#Check for jq
+if ! command -v jq >/dev/null 2>&1; then
+  echo "Missing dependency: 'jq' is required to run this script."
+  echo " Install it with: sudo apt install jq    # or: sudo dnf install jq"
+  exit 1
+fi
+
+# Load config
+read_config() {
+  if [ ! -f "$CONFIG_FILE" ]; then
+    echo " Config file not found. Run: lft signup"
+    exit 1
+  fi
+  USER=$(jq -r .user "$CONFIG_FILE")
+  PASS=$(jq -r .pass "$CONFIG_FILE")
+  HOST=$(jq -r .host "$CONFIG_FILE")
+  ROOT=$(jq -r .root "$CONFIG_FILE")
+}
+
+#  Signup function
+signup() {
+  echo "LFT Signup:"
+  read -p "BunnyCDN username: " USER
+  read -s -p "BunnyCDN password (FTP API key): " PASS; echo
+  read -p "BunnyCDN FTP host (e.g. ftp://uk.storage.bunnycdn.com): " HOST
+  read -p "Remote base path (e.g. /soupcan or /project): " ROOT
+
+  jq -n --arg user "$USER" --arg pass "$PASS" --arg host "$HOST" --arg root "$ROOT" \
+    '{user: $user, pass: $pass, host: $host, root: $root}' > "$CONFIG_FILE"
+
+  echo " Config saved to $CONFIG_FILE"
+}
+
+#  Uninstall function
+uninstall() {
+  echo "This will remove the lft CLI and all its config files (~/.lft)"
+  read -p "Are you sure? [y/N]: " confirm
+  if [[ "$confirm" =~ ^[Yy]$ ]]; then
+    sudo rm -f /usr/local/bin/lft /usr/bin/lft
+    rm -rf "$CONFIG_DIR"
+    echo "LFT uninstalled."
+  else
+    echo "Cancelled."
+  fi
+  exit 0
+}
+
+#  Path expanders
+expand_local_path() {
+  [[ "$1" == ~* ]] && echo "${1/#\~/$HOME}" || echo "$1"
+}
+
+expand_remote_path() {
+  path="${1#/}"
+  echo "${ROOT%/}/${path}"
+}
+
+# Help message
+show_help() {
+  echo ""
+  echo "lft - BunnyCDN CLI Wrapper"
+  echo "Setup: lft signup"
+  echo ""
+  echo "Upload:"
+  echo "  lft -uF  LOCAL_FILE REMOTE_DIR     Upload single file"
+  echo "  lft -uD  LOCAL_DIR  REMOTE_DIR     Upload folder (preserve structure)"
+  echo "  lft -uDF LOCAL_DIR  REMOTE_DIR     Upload contents only (flatten)"
+  echo ""
+  echo "Download:"
+  echo "  lft -dF  REMOTE_FILE LOCAL_FILE    Download single file"
+  echo "  lft -dD  REMOTE_DIR  LOCAL_DIR     Download folder"
+  echo ""
+  echo "Other:"
+  echo "  lft mkdir REMOTE_DIR               Create remote directory"
+  echo "  lft rm    REMOTE_PATH              Delete file or directory"
+  echo "  lft -Tr                            Tree view of remote structure"
+  echo "  lft uninstall                     Uninstall the tool"
+  echo ""
+}
+
+# Subcommand router
+case "$1" in
+  signup)
+    signup
+    exit 0
+    ;;
+  uninstall)
+    uninstall
+    ;;
+  help|"")
+    read_config
+    show_help
+    [[ "$1" == "help" ]] && exit 0
+    echo "Opening LFTP shell..."
+    lftp -u "$USER","$PASS" "$HOST"
+    exit 0
+    ;;
+esac
+
+# Load config for all other commands
+read_config
+
+case "$1" in
+  -uF)
+    local_file=$(expand_local_path "$2")
+    remote_dir=$(expand_remote_path "$3")
+    [ ! -f "$local_file" ] && echo "❌ File not found: $local_file" && exit 1
+    lftp -u "$USER","$PASS" "$HOST" -e "cd \"$remote_dir\"; put -c \"$local_file\"; bye"
+    ;;
+  -uD)
+    local_dir=$(expand_local_path "$2")
+    remote_dir=$(expand_remote_path "$3")
+    folder_name=$(basename "$local_dir")
+    parent_dir=$(dirname "$local_dir")
+    lftp -u "$USER","$PASS" "$HOST" <<EOF
+cd "$remote_dir"
+lcd "$parent_dir"
+mirror --reverse --parallel=8 --only-newer "$folder_name" "$folder_name"
+bye
+EOF
+    ;;
+  -uDF)
+    local_dir=$(expand_local_path "$2")
+    remote_dir=$(expand_remote_path "$3")
+    lftp -u "$USER","$PASS" "$HOST" <<EOF
+cd "$remote_dir"
+lcd "$local_dir"
+mirror --reverse --no-empty-dirs --no-perms --no-symlinks --parallel=8 . .
+bye
+EOF
+    ;;
+  -dF)
+    remote_file=$(expand_remote_path "$2")
+    local_file=$(expand_local_path "$3")
+    lftp -u "$USER","$PASS" "$HOST" -e "get \"$remote_file\" -o \"$local_file\"; bye"
+    ;;
+  -dD)
+    remote_dir=$(expand_remote_path "$2")
+    local_dir=$(expand_local_path "$3")
+    lftp -u "$USER","$PASS" "$HOST" <<EOF
+mirror --parallel=8 "$remote_dir" "$local_dir"
+bye
+EOF
+    ;;
+  mkdir)
+    remote_dir=$(expand_remote_path "$2")
+    lftp -u "$USER","$PASS" "$HOST" -e "mkdir -p \"$remote_dir\"; bye"
+    ;;
+  rm)
+    remote_target=$(expand_remote_path "$2")
+    lftp -u "$USER","$PASS" "$HOST" -e "rm -r \"$remote_target\"; bye"
+    ;;
+  -Tr)
+    MAX_DEPTH=10
+    echo "Remote directory tree ($ROOT, depth ≤ $MAX_DEPTH)"
+    lftp -u "$USER","$PASS" "$HOST" <<EOF | awk -F/ -v maxdepth="$MAX_DEPTH" '
+/^\// { print \$0; next }
+{
+  if (\$0 ~ /^\s*$/ || \$0 ~ /^\./) next
+  last = \$NF
+  depth = NF - 1
+  if (depth <= maxdepth) {
+    indent = depth
+    printf "%*s- %s\\n", indent * 2, "", last
+  }
+}
+'
+cd "$ROOT"
+find
+bye
+EOF
+    ;;
+  *)
+    echo "Unknown command: $1. Use: lft help"
+    exit 1
+    ;;
+esac
+
