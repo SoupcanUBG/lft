@@ -68,14 +68,15 @@ uninstall() {
   echo "This will remove the lft CLI and all its config files (~/.lft)"
   read -p "Are you sure? [y/N]: " confirm
   if [[ "$confirm" =~ ^[Yy]$ ]]; then
-    sudo rm -f /usr/local/bin/lft
+    sudo rm -f /usr/local/bin/lft /usr/bin/lft
     rm -rf "$CONFIG_DIR"
-    echo "LFT uninstalled."
+    echo "✅ LFT uninstalled."
   else
-    echo "Cancelled."
+    echo "❌ Cancelled."
   fi
   exit 0
 }
+
 
 expand_local_path() {
   [[ "$1" == ~* ]] && echo "${1/#\~/$HOME}" || echo "$1"
