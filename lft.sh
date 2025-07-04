@@ -4,17 +4,17 @@ CONFIG_DIR="$HOME/.lft"
 CONFIG_FILE="$CONFIG_DIR/config.json"
 mkdir -p "$CONFIG_DIR"
 
-# ✅ Check for jq
+#Check for jq
 if ! command -v jq >/dev/null 2>&1; then
-  echo "❌ Missing dependency: 'jq' is required to run this script."
-  echo "👉 Install it with: sudo apt install jq    # or: sudo dnf install jq"
+  echo "Missing dependency: 'jq' is required to run this script."
+  echo " Install it with: sudo apt install jq    # or: sudo dnf install jq"
   exit 1
 fi
 
-# ✅ Load config
+# Load config
 read_config() {
   if [ ! -f "$CONFIG_FILE" ]; then
-    echo "❌ Config file not found. Run: lft signup"
+    echo " Config file not found. Run: lft signup"
     exit 1
   fi
   USER=$(jq -r .user "$CONFIG_FILE")
@@ -23,7 +23,7 @@ read_config() {
   ROOT=$(jq -r .root "$CONFIG_FILE")
 }
 
-# ✅ Signup function
+#  Signup function
 signup() {
   echo "LFT Signup:"
   read -p "BunnyCDN username: " USER
@@ -34,24 +34,24 @@ signup() {
   jq -n --arg user "$USER" --arg pass "$PASS" --arg host "$HOST" --arg root "$ROOT" \
     '{user: $user, pass: $pass, host: $host, root: $root}' > "$CONFIG_FILE"
 
-  echo "✅ Config saved to $CONFIG_FILE"
+  echo " Config saved to $CONFIG_FILE"
 }
 
-# ✅ Uninstall function
+#  Uninstall function
 uninstall() {
   echo "This will remove the lft CLI and all its config files (~/.lft)"
   read -p "Are you sure? [y/N]: " confirm
   if [[ "$confirm" =~ ^[Yy]$ ]]; then
     sudo rm -f /usr/local/bin/lft /usr/bin/lft
     rm -rf "$CONFIG_DIR"
-    echo "✅ LFT uninstalled."
+    echo "LFT uninstalled."
   else
-    echo "❌ Cancelled."
+    echo "Cancelled."
   fi
   exit 0
 }
 
-# ✅ Path expanders
+#  Path expanders
 expand_local_path() {
   [[ "$1" == ~* ]] && echo "${1/#\~/$HOME}" || echo "$1"
 }
@@ -61,7 +61,7 @@ expand_remote_path() {
   echo "${ROOT%/}/${path}"
 }
 
-# ✅ Help message
+# Help message
 show_help() {
   echo ""
   echo "lft - BunnyCDN CLI Wrapper"
@@ -84,7 +84,7 @@ show_help() {
   echo ""
 }
 
-# ✅ Subcommand router
+# Subcommand router
 case "$1" in
   signup)
     signup
@@ -158,7 +158,7 @@ EOF
     ;;
   -Tr)
     MAX_DEPTH=10
-    echo "🌲 Remote directory tree ($ROOT, depth ≤ $MAX_DEPTH)"
+    echo "Remote directory tree ($ROOT, depth ≤ $MAX_DEPTH)"
     lftp -u "$USER","$PASS" "$HOST" <<EOF | awk -F/ -v maxdepth="$MAX_DEPTH" '
 /^\// { print \$0; next }
 {
