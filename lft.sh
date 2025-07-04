@@ -1,14 +1,17 @@
-#!/bin/bashCONFIG_DIR="$HOME/.lft"
-# Check if jq is installed
+#!/bin/bash
+
+CONFIG_DIR="$HOME/.lft"
+CONFIG_FILE="$CONFIG_DIR/config.json"
+mkdir -p "$CONFIG_DIR"
+
+# ✅ Check for jq
 if ! command -v jq >/dev/null 2>&1; then
   echo "❌ Missing dependency: 'jq' is required to run this script."
   echo "👉 Install it with: sudo apt install jq    # or: sudo dnf install jq"
   exit 1
 fi
 
-CONFIG_FILE="$CONFIG_DIR/config.json"
-mkdir -p "$CONFIG_DIR"
-
+# ✅ Load config
 read_config() {
   if [ ! -f "$CONFIG_FILE" ]; then
     echo "❌ Config file not found. Run: lft signup"
@@ -20,6 +23,7 @@ read_config() {
   ROOT=$(jq -r .root "$CONFIG_FILE")
 }
 
+# ✅ Signup function
 signup() {
   echo "LFT Signup:"
   read -p "BunnyCDN username: " USER
@@ -33,37 +37,7 @@ signup() {
   echo "✅ Config saved to $CONFIG_FILE"
 }
 
-mkdir -p "$CONFIG_DIR"
-
-read_config() {
-  if [ ! -f "$CONFIG_FILE" ]; then
-    echo "❌ Config file not found. Run: lft signup"
-    exit 1
-  fi
-  USER=$(jq -r .user "$CONFIG_FILE")
-  PASS=$(jq -r .pass "$CONFIG_FILE")
-  HOST=$(jq -r .host "$CONFIG_FILE")
-  ROOT=$(jq -r .root "$CONFIG_FILE")
-}
-
-signup() {
-  echo "LFT Signup:"
-  read -p "BunnyCDN username: " USER
-  read -s -p "BunnyCDN password (FTP API key): " PASS; echo
-  read -p "BunnyCDN FTP host (e.g. ftp://uk.storage.bunnycdn.com): " HOST
-  read -p "Remote base path (e.g. /soupcan or /project): " ROOT
-
-  jq -n --arg user "$USER" --arg pass "$PASS" --arg host "$HOST" --arg root "$ROOT" \
-    '{user: $user, pass: $pass, host: $host, root: $root}' > "$CONFIG_FILE"
-
-  echo "✅ Config saved to $CONFIG_FILE"
-}
-
-
-
-
-
-
+# ✅ Uninstall function
 uninstall() {
   echo "This will remove the lft CLI and all its config files (~/.lft)"
   read -p "Are you sure? [y/N]: " confirm
@@ -77,7 +51,7 @@ uninstall() {
   exit 0
 }
 
-
+# ✅ Path expanders
 expand_local_path() {
   [[ "$1" == ~* ]] && echo "${1/#\~/$HOME}" || echo "$1"
 }
@@ -87,6 +61,7 @@ expand_remote_path() {
   echo "${ROOT%/}/${path}"
 }
 
+# ✅ Help message
 show_help() {
   echo ""
   echo "lft - BunnyCDN CLI Wrapper"
@@ -109,6 +84,7 @@ show_help() {
   echo ""
 }
 
+# ✅ Subcommand router
 case "$1" in
   signup)
     signup
@@ -127,14 +103,15 @@ case "$1" in
     ;;
 esac
 
+# Load config for all other commands
 read_config
 
 case "$1" in
   -uF)
     local_file=$(expand_local_path "$2")
     remote_dir=$(expand_remote_path "$3")
-    [ ! -f "$local_file" ] && echo "File not found: $local_file" && exit 1
-    lftp -u "$USER","$PASS" "$HOST" -e "cd $remote_dir; put -c "$local_file"; bye"
+    [ ! -f "$local_file" ] && echo "❌ File not found: $local_file" && exit 1
+    lftp -u "$USER","$PASS" "$HOST" -e "cd \"$remote_dir\"; put -c \"$local_file\"; bye"
     ;;
   -uD)
     local_dir=$(expand_local_path "$2")
@@ -142,8 +119,8 @@ case "$1" in
     folder_name=$(basename "$local_dir")
     parent_dir=$(dirname "$local_dir")
     lftp -u "$USER","$PASS" "$HOST" <<EOF
-cd $remote_dir
-lcd $parent_dir
+cd "$remote_dir"
+lcd "$parent_dir"
 mirror --reverse --parallel=8 --only-newer "$folder_name" "$folder_name"
 bye
 EOF
@@ -152,8 +129,8 @@ EOF
     local_dir=$(expand_local_path "$2")
     remote_dir=$(expand_remote_path "$3")
     lftp -u "$USER","$PASS" "$HOST" <<EOF
-cd $remote_dir
-lcd $local_dir
+cd "$remote_dir"
+lcd "$local_dir"
 mirror --reverse --no-empty-dirs --no-perms --no-symlinks --parallel=8 . .
 bye
 EOF
@@ -161,7 +138,7 @@ EOF
   -dF)
     remote_file=$(expand_remote_path "$2")
     local_file=$(expand_local_path "$3")
-    lftp -u "$USER","$PASS" "$HOST" -e "get "$remote_file" -o "$local_file"; bye"
+    lftp -u "$USER","$PASS" "$HOST" -e "get \"$remote_file\" -o \"$local_file\"; bye"
     ;;
   -dD)
     remote_dir=$(expand_remote_path "$2")
@@ -173,28 +150,28 @@ EOF
     ;;
   mkdir)
     remote_dir=$(expand_remote_path "$2")
-    lftp -u "$USER","$PASS" "$HOST" -e "mkdir -p $remote_dir; bye"
+    lftp -u "$USER","$PASS" "$HOST" -e "mkdir -p \"$remote_dir\"; bye"
     ;;
   rm)
     remote_target=$(expand_remote_path "$2")
-    lftp -u "$USER","$PASS" "$HOST" -e "rm -r "$remote_target"; bye"
+    lftp -u "$USER","$PASS" "$HOST" -e "rm -r \"$remote_target\"; bye"
     ;;
   -Tr)
     MAX_DEPTH=10
-    echo "Remote directory tree ($ROOT, depth ≤ $MAX_DEPTH)"
+    echo "🌲 Remote directory tree ($ROOT, depth ≤ $MAX_DEPTH)"
     lftp -u "$USER","$PASS" "$HOST" <<EOF | awk -F/ -v maxdepth="$MAX_DEPTH" '
-      /^\// { print \$0; next }
-      {
-        if (\$0 ~ /^\s*\$/ || \$0 ~ /^\./) next
-        last = \$NF
-        depth = NF - 1
-        if (depth <= maxdepth) {
-          indent = depth
-          printf "%*s- %s\n", indent * 2, "", last
-        }
-      }
+/^\// { print \$0; next }
+{
+  if (\$0 ~ /^\s*$/ || \$0 ~ /^\./) next
+  last = \$NF
+  depth = NF - 1
+  if (depth <= maxdepth) {
+    indent = depth
+    printf "%*s- %s\\n", indent * 2, "", last
+  }
+}
 '
-cd $ROOT
+cd "$ROOT"
 find
 bye
 EOF
